@@ -1,28 +1,43 @@
 ﻿using UnityEngine;
 using Parse;
 using System;
+using System.Collections.Generic;
 
 public class GameConfig : MonoBehaviour
 {
+	private List<Action> mainThreadCalls = new List<Action>();
+	private object threadCallMutex = new object();
+
 	private void Start()
 	{
-		//UpdateConfig(ConfigUpdated);
 		UpdateConfig(delegate()
 		{
-			Debug.Log("Cost: " + ParseConfig.CurrentConfig.Get<int>("tierOneCoins"));
+			Application.LoadLevel(Application.loadedLevel + 1);
 		});
-	}
-
-	private void ConfigUpdated()
-	{
-		Debug.Log("Cost: " + ParseConfig.CurrentConfig.Get<int>("tierOneCoins"));
 	}
 
 	public void UpdateConfig(Action callback)
 	{
 		ParseConfig.GetAsync().ContinueWith(t =>
 		{
-			callback();
+			lock (threadCallMutex)
+			{
+				mainThreadCalls.Add(callback);
+			}
 		});
+	}
+
+	private void Update()
+	{
+		if (mainThreadCalls.Count > 0)
+		{
+			lock (threadCallMutex)
+			{
+				foreach (Action call in mainThreadCalls)
+					call();
+
+				mainThreadCalls.Clear();
+			}
+		}
 	}
 }
